@@ -1,6 +1,7 @@
 from django.contrib import admin
 
-from .models import Ingredient, Recipe, RecipeIngredientEntry, Tag, MeasurementUnit
+from .models import (Ingredient, MeasurementUnit, Recipe,
+                     RecipeIngredientEntry, Tag)
 
 
 @admin.register(Tag)
@@ -39,8 +40,8 @@ class RecipeAdmin(admin.ModelAdmin):
         "text",
         "cooking_time",
     )
-    inlines = (RecipeIngredientEntryInLine, )
-    readonly_fields = ("times_in_favourite", )
+    inlines = (RecipeIngredientEntryInLine,)
+    readonly_fields = ("times_in_favourite",)
     list_display = (
         "name",
         "author",

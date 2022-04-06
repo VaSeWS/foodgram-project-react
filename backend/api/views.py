@@ -2,19 +2,17 @@ from django.contrib.auth import get_user_model
 from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from recipes.models import Ingredient, Recipe, Tag
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-
-from recipes.models import Ingredient, Recipe, Tag, RecipeIngredientEntry
 from rest_framework.views import APIView
 
 from .permissions import IsStaffOrReadOnly, IsStaffOwnerOrReadOnly
-from .serializers import (IngredientSerializer, RecipeSerializer,
-                          RecipeShortSerializer, TagSerializer,
-                          UserSubscriptionSerializer,
-                          RecipeCreateSerializer)
+from .serializers import (IngredientSerializer, RecipeCreateSerializer,
+                          RecipeSerializer, RecipeShortSerializer,
+                          TagSerializer, UserSubscriptionSerializer)
 
 
 @api_view(["GET", "DELETE"])
@@ -66,23 +64,20 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         name = self.request.query_params.get("name", None)
         if name:
-            return Ingredient.objects.filter(
-                name__istartswith=name
-            ).select_related()
+            return Ingredient.objects.filter(name__istartswith=name).select_related()
         return Ingredient.objects.all().select_related()
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
     queryset = Recipe.objects.all().prefetch_related()
     permission_classes = (IsStaffOwnerOrReadOnly,)
-    http_method_names = ('get', 'post', 'delete', 'put')
+    http_method_names = ("get", "post", "delete", "put")
 
     def get_queryset(self):
         result = Recipe.objects.all().prefetch_related()
         user = self.request.user
         is_favorited = self.request.query_params.get("is_favorited", "0")
-        is_in_shopping_cart = self.request.query_params.get(
-            "is_in_shopping_cart", "0")
+        is_in_shopping_cart = self.request.query_params.get("is_in_shopping_cart", "0")
         author = self.request.query_params.get("author")
         # If multiple tags were given as tags=lunch&tags=breakfast
         # only the last one is taken without casting to dict.
@@ -164,22 +159,23 @@ class DownloadShoppingCart(APIView):
         shopping_list = {}
         user = request.user
         ingredients = user.shopping_list.values_list(
-            'ingredient_entries__ingredient__name',
-            'ingredient_entries__amount',
-            'ingredient_entries__ingredient__measurement_unit__name')
+            "ingredient_entries__ingredient__name",
+            "ingredient_entries__amount",
+            "ingredient_entries__ingredient__measurement_unit__name",
+        )
         ingredients = ingredients.values(
-            'ingredient_entries__ingredient__name',
-            'ingredient_entries__ingredient__measurement_unit__name'
-        ).annotate(total=Sum('ingredient_entries__amount'))
+            "ingredient_entries__ingredient__name",
+            "ingredient_entries__ingredient__measurement_unit__name",
+        ).annotate(total=Sum("ingredient_entries__amount"))
         for ingredient in ingredients:
-            amount = ingredient['total']
-            name = ingredient['ingredient_entries__ingredient__name']
+            amount = ingredient["total"]
+            name = ingredient["ingredient_entries__ingredient__name"]
             measurement_unit = ingredient[
-                'ingredient_entries__ingredient__measurement_unit__name'
+                "ingredient_entries__ingredient__measurement_unit__name"
             ]
             shopping_list[name] = {
-                'measurement_unit': measurement_unit,
-                'amount': amount
+                "measurement_unit": measurement_unit,
+                "amount": amount,
             }
         to_buy = []
         for item in shopping_list:
@@ -188,6 +184,6 @@ class DownloadShoppingCart(APIView):
                 f'{shopping_list[item]["measurement_unit"]} \n'
             )
 
-        response = HttpResponse(to_buy, 'Content-Type: text/plain')
-        response['Content-Disposition'] = 'attachment; filename="to_buy.txt"'
+        response = HttpResponse(to_buy, "Content-Type: text/plain")
+        response["Content-Disposition"] = 'attachment; filename="to_buy.txt"'
         return response

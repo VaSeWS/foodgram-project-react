@@ -1,9 +1,8 @@
 import csv
 import logging
+
 from django.core.management import BaseCommand
-
 from recipes.models import Ingredient, MeasurementUnit
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -28,14 +27,13 @@ class Command(BaseCommand):
         ingredients = []
         with open(file_path, "r", newline="", encoding="utf-8") as file:
             logger.info("Opened %s", file_path)
-            reader = csv.reader(file, delimiter=',')
+            reader = csv.reader(file, delimiter=",")
             for entry in reader:
-                measurement_unit = MeasurementUnit.objects.get_or_create(
-                    name=entry[1]
-                )[0]
+                measurement_unit = MeasurementUnit.objects.get_or_create(name=entry[1])[
+                    0
+                ]
                 ingredient = Ingredient(
-                    name=entry[0],
-                    measurement_unit=measurement_unit
+                    name=entry[0], measurement_unit=measurement_unit
                 )
                 ingredients.append(ingredient)
                 logger.info("Entry %s, %s was parsed", *entry)

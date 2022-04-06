@@ -1,8 +1,6 @@
 from drf_extra_fields.fields import Base64ImageField
-from rest_framework import serializers
-
 from recipes.models import Ingredient, Recipe, RecipeIngredientEntry, Tag
-from rest_framework.generics import get_object_or_404
+from rest_framework import serializers
 from users.models import User
 
 
@@ -64,9 +62,7 @@ class RecipeIngredientEntrySerializer(serializers.ModelSerializer):
 
 
 class RecipeIngredientEntryCreateSerializer(serializers.ModelSerializer):
-    id = serializers.PrimaryKeyRelatedField(
-        queryset=Ingredient.objects.all()
-    )
+    id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all())
     amount = serializers.IntegerField()
 
     class Meta:
@@ -84,8 +80,7 @@ class RecipeSerializer(serializers.ModelSerializer):
     tags = TagSerializer(many=True)
     author = UserSerializer(read_only=True)
     ingredients = RecipeIngredientEntrySerializer(
-        source="ingredient_entries",
-        many=True
+        source="ingredient_entries", many=True
     )
     image = Base64ImageField()
 
@@ -132,46 +127,41 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
         many=True,
     )
     image = Base64ImageField()
-    tags = serializers.PrimaryKeyRelatedField(
-        queryset=Tag.objects.all(),
-        many=True
-    )
+    tags = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all(), many=True)
 
     def validate(self, data):
-        ingredients = self.initial_data.get('ingredients')
+        ingredients = self.initial_data.get("ingredients")
         ingredients_ids = []
         if len(ingredients) == 0:
             raise serializers.ValidationError(
-                'There must be at least one ingredient in the recipe.'
+                "There must be at least one ingredient in the recipe."
             )
         for item in ingredients:
             try:
-                amount = int(item.get('amount'))
+                amount = int(item.get("amount"))
             except ValueError:
                 raise serializers.ValidationError("'amount' must be an integer.")
             if amount <= 0:
                 raise serializers.ValidationError(
                     "Ingredient amount must be a positive integer."
                 )
-            elif item['id'] in ingredients_ids:
+            elif item["id"] in ingredients_ids:
                 raise serializers.ValidationError(
                     "Ingredients must be unique in one recipe."
                 )
             else:
-                ingredients_ids.append(item['id'])
+                ingredients_ids.append(item["id"])
         return data
 
     def validate_tags(self, data):
-        tags = self.initial_data.get('tags')
+        tags = self.initial_data.get("tags")
         if len(tags) == 0:
-            raise serializers.ValidationError('There must be at least one tag.')
+            raise serializers.ValidationError("There must be at least one tag.")
         unique_id_tags = dict()
         for item in tags:
             pk = item
             if pk in unique_id_tags:
-                raise serializers.ValidationError(
-                    "Tags must be unique."
-                )
+                raise serializers.ValidationError("Tags must be unique.")
             unique_id_tags[pk] = 0
         return data
 
@@ -179,12 +169,10 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
         try:
             cooking_time = float(data)
         except ValueError:
-            raise serializers.ValidationError(
-                'Cooking time must be an integer.'
-            )
+            raise serializers.ValidationError("Cooking time must be an integer.")
         if cooking_time <= 0:
             raise serializers.ValidationError(
-                'Cooking time must be a positive integer.'
+                "Cooking time must be a positive integer."
             )
         return data
 
@@ -194,25 +182,22 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
 
     def add_ingredient(self, ingredients, recipe):
         for ingredient in ingredients:
-            ingredient_entry = ingredient['id']
-            amount = ingredient['amount']
-            recipe.ingredient_entries.create(
-                ingredient=ingredient_entry,
-                amount=amount
-            )
+            ingredient_entry = ingredient["id"]
+            amount = ingredient["amount"]
+            recipe.ingredient_entries.create(ingredient=ingredient_entry, amount=amount)
 
     def create(self, validated_data):
-        tags_data = validated_data.pop('tags')
-        ingredients_data = validated_data.pop('ingredients')
-        author = self.context.get('request').user
+        tags_data = validated_data.pop("tags")
+        ingredients_data = validated_data.pop("ingredients")
+        author = self.context.get("request").user
         recipe = Recipe.objects.create(author=author, **validated_data)
         self.add_ingredient(ingredients_data, recipe)
         self.add_tags(tags_data, recipe)
         return recipe
 
     def update(self, instance, validated_data):
-        tags_data = validated_data.pop('tags')
-        ingredient_data = validated_data.pop('ingredients')
+        tags_data = validated_data.pop("tags")
+        ingredient_data = validated_data.pop("ingredients")
         instance.tags.clear()
         self.add_tags(tags_data, instance)
         instance.ingredients.clear()
@@ -222,23 +207,20 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         return RecipeSerializer(
-            instance,
-            context={
-                'request': self.context.get('request')
-            }
+            instance, context={"request": self.context.get("request")}
         ).data
 
     class Meta:
         model = Recipe
         fields = (
-            'id',
-            'tags',
-            'author',
-            'ingredients',
-            'name',
-            'image',
-            'text',
-            'cooking_time',
+            "id",
+            "tags",
+            "author",
+            "ingredients",
+            "name",
+            "image",
+            "text",
+            "cooking_time",
         )
 
     # def create(self, validated_data):

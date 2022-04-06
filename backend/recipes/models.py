@@ -1,6 +1,5 @@
 from django.contrib.auth import get_user_model
 from django.db import models
-
 from users.models import get_deleted_user
 
 
@@ -13,7 +12,7 @@ class Tag(models.Model):
         return self.name
 
     class Meta:
-        ordering = ("id", )
+        ordering = ("id",)
 
 
 class MeasurementUnit(models.Model):
@@ -23,30 +22,25 @@ class MeasurementUnit(models.Model):
         return self.name
 
     class Meta:
-        ordering = ("id", )
+        ordering = ("id",)
 
 
 class Ingredient(models.Model):
     name = models.CharField(max_length=100)
-    measurement_unit = models.ForeignKey(
-        MeasurementUnit,
-        on_delete=models.RESTRICT
-    )
+    measurement_unit = models.ForeignKey(MeasurementUnit, on_delete=models.RESTRICT)
 
     def __str__(self):
         return self.name
 
     class Meta:
-        ordering = ("name", )
+        ordering = ("name",)
         unique_together = ("name", "measurement_unit")
 
 
 class RecipeIngredientEntry(models.Model):
     ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT)
     recipe = models.ForeignKey(
-        "recipes.Recipe",
-        on_delete=models.CASCADE,
-        related_name="ingredient_entries"
+        "recipes.Recipe", on_delete=models.CASCADE, related_name="ingredient_entries"
     )
     amount = models.PositiveIntegerField()
 
@@ -55,18 +49,15 @@ class RecipeIngredientEntry(models.Model):
 
     class Meta:
         verbose_name_plural = "Recipe ingredient entries"
-        ordering = ("id", )
+        ordering = ("id",)
 
 
 class Recipe(models.Model):
     author = models.ForeignKey(
-        get_user_model(),
-        on_delete=models.SET(get_deleted_user),
-        related_name="recipes"
+        get_user_model(), on_delete=models.SET(get_deleted_user), related_name="recipes"
     )
     ingredients = models.ManyToManyField(
-        Ingredient,
-        through="recipes.RecipeIngredientEntry"
+        Ingredient, through="recipes.RecipeIngredientEntry"
     )
     tags = models.ManyToManyField(Tag)
     image = models.ImageField()
@@ -83,4 +74,4 @@ class Recipe(models.Model):
         return self.in_favourites.count()
 
     class Meta:
-        ordering = ("-created", )
+        ordering = ("-created",)
