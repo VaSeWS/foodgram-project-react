@@ -1,101 +1,115 @@
 from django.contrib.auth import get_user_model
-from django.db.models import Sum
+from django.db.models import Exists, F, Sum, Value
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from recipes.models import Ingredient, Recipe, Tag
-from rest_framework import permissions, status, viewsets
+from django_filters import rest_framework as filters
+from rest_framework import generics, permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from recipes.models import Ingredient, Recipe, Tag
+
+from .filters import IngredientFilter, RecipeFilter
 from .permissions import IsStaffOrReadOnly, IsStaffOwnerOrReadOnly
 from .serializers import (IngredientSerializer, RecipeCreateSerializer,
                           RecipeSerializer, RecipeShortSerializer,
                           TagSerializer, UserSubscriptionSerializer)
 
+User = get_user_model()
+
 
 @api_view(["GET", "DELETE"])
 @permission_classes([permissions.IsAuthenticated])
 def subscribe(request, uid):
-    author = get_object_or_404(get_user_model(), id=uid)
+    author = get_object_or_404(User, id=uid)
     user = request.user
-    serializer = UserSubscriptionSerializer(author, context={"user": user})
+    serializer = UserSubscriptionSerializer(
+        author,
+        context={
+            "user": user,
+            "request": request,
+        },
+    )
     in_followed = user.followed_to.filter(id=author.id).exists()
-    if request.method == "GET":
-        if not in_followed:
-            user.followed_to.add(author)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-    if request.method == "DELETE":
-        if in_followed:
-            user.followed_to.remove(author)
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
     error_message_part = (
         "already subscribed" if request.method == "GET" else "not subscribed"
     )
+    if request.method == "GET" and not in_followed:
+        user.followed_to.add(author)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    if request.method == "DELETE" and in_followed:
+        user.followed_to.remove(author)
+        return Response(status=status.HTTP_204_NO_CONTENT)
     return Response(
         {"errors": f"You're {error_message_part} to this author"},
         status=status.HTTP_400_BAD_REQUEST,
     )
 
 
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def subscriptions(request):
-    user = request.user
-    serializer = UserSubscriptionSerializer(
-        user.followed_to, context={"user": user}, many=True
-    )
-    return Response(serializer.data, status=status.HTTP_200_OK)
+class ListFollowViewSet(generics.ListAPIView):
+    queryset = User.objects.all()
+    permission_classes = [
+        IsAuthenticated,
+    ]
+    serializer_class = UserSubscriptionSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context.update({"request": self.request, "user": self.request.user})
+        return context
+
+    def get_queryset(self):
+        return self.request.user.followed_to.prefetch_related()
 
 
 class TagViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
     permission_classes = (IsStaffOrReadOnly,)
+    pagination_class = None
 
 
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Ingredient.objects.all().select_related()
+    queryset = Ingredient.objects.select_related()
     serializer_class = IngredientSerializer
     permission_classes = (IsStaffOrReadOnly,)
-
-    def get_queryset(self):
-        name = self.request.query_params.get("name", None)
-        if name:
-            return Ingredient.objects.filter(name__istartswith=name).select_related()
-        return Ingredient.objects.all().select_related()
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = IngredientFilter
+    pagination_class = None
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
-    queryset = Recipe.objects.all().prefetch_related()
+    queryset = Recipe.objects.prefetch_related()
     permission_classes = (IsStaffOwnerOrReadOnly,)
-    http_method_names = ("get", "post", "delete", "put")
+    http_method_names = ("get", "post", "delete", "put", "patch")
+    # Frontend sends PATCH request on recipe update
+    # instead of PUT as it is in the api docs
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = RecipeFilter
 
     def get_queryset(self):
-        result = Recipe.objects.all().prefetch_related()
-        user = self.request.user
-        is_favorited = self.request.query_params.get("is_favorited", "0")
-        is_in_shopping_cart = self.request.query_params.get("is_in_shopping_cart", "0")
-        author = self.request.query_params.get("author")
-        # If multiple tags were given as tags=lunch&tags=breakfast
-        # only the last one is taken without casting to dict.
-        tags = dict(self.request.query_params).get("tags", [])
-        if author:
-            result = result.filter(author=author)
-        if tags:
-            result = result.filter(tags__name__in=tags)
-        if int(is_favorited):
-            result = result.intersection(user.favourite.all())
-        if int(is_in_shopping_cart):
-            result = result.intersection(user.shopping_list.all())
-        return result
+        return Recipe.objects.prefetch_related().annotate(
+            is_favorited=(
+                Exists(self.request.user.favourite.filter(id=F("id")))
+                if self.request.user.is_authenticated
+                else Value(False)
+            ),
+            is_in_shopping_cart=(
+                Exists(self.request.user.shopping_list.filter(id=F("id")))
+                if self.request.user.is_authenticated
+                else Value(False)
+            ),
+        )
 
     def get_serializer_class(self):
-        if self.action in ("create", "update"):
+        if self.action in ("create", "update", "partial_update"):
             return RecipeCreateSerializer
         return RecipeSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
 
     @action(
         methods=("GET", "DELETE"),
@@ -108,17 +122,15 @@ class RecipeViewSet(viewsets.ModelViewSet):
         recipe = get_object_or_404(Recipe, pk=recipe_id)
         serializer = self.get_serializer(recipe)
         recipe_in_favorite = user.favourite.filter(id=recipe.id).exists()
-        if request.method == "GET":
-            if not recipe_in_favorite:
-                user.favourite.add(recipe)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        if request.method == "DELETE":
-            if recipe_in_favorite:
-                user.favourite.remove(recipe)
-                return Response(status=status.HTTP_204_NO_CONTENT)
-
         error_msg_part = "is already" if request.method == "GET" else "is not"
+        if request.method == "GET" and not recipe_in_favorite:
+            user.favourite.add(recipe)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        if request.method == "DELETE" and recipe_in_favorite:
+            user.favourite.remove(recipe)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
         return Response(
             {"errors": f"Recipe {error_msg_part} in favourites"},
             status=status.HTTP_400_BAD_REQUEST,
@@ -135,17 +147,15 @@ class RecipeViewSet(viewsets.ModelViewSet):
         recipe = get_object_or_404(Recipe, pk=recipe_id)
         serializer = self.get_serializer(recipe)
         recipe_in_cart = user.shopping_list.filter(id=recipe.id).exists()
-        if request.method == "GET":
-            if not recipe_in_cart:
-                user.shopping_list.add(recipe)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        if request.method == "DELETE":
-            if recipe_in_cart:
-                user.shopping_list.remove(recipe)
-                return Response(status=status.HTTP_204_NO_CONTENT)
-
         error_msg_part = "is already" if request.method == "GET" else "is not"
+        if request.method == "GET" and not recipe_in_cart:
+            user.shopping_list.add(recipe)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        if request.method == "DELETE" and recipe_in_cart:
+            user.shopping_list.remove(recipe)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
         return Response(
             {"errors": f"Recipe {error_msg_part} in shopping cart"},
             status=status.HTTP_400_BAD_REQUEST,
@@ -158,12 +168,7 @@ class DownloadShoppingCart(APIView):
     def get(self, request):
         shopping_list = {}
         user = request.user
-        ingredients = user.shopping_list.values_list(
-            "ingredient_entries__ingredient__name",
-            "ingredient_entries__amount",
-            "ingredient_entries__ingredient__measurement_unit__name",
-        )
-        ingredients = ingredients.values(
+        ingredients = user.shopping_list.values(
             "ingredient_entries__ingredient__name",
             "ingredient_entries__ingredient__measurement_unit__name",
         ).annotate(total=Sum("ingredient_entries__amount"))

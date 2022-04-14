@@ -23,8 +23,6 @@ class User(AbstractUser):
         symmetrical=False,
         blank=True,
     )
-    USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ("first_name", "last_name", "password", "username")
 
     class Meta:
         constraints = (
@@ -32,3 +30,6 @@ class User(AbstractUser):
                 check=~models.Q(username__iexact="me"), name="username_is_not_me"
             ),
         )
+
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ("first_name", "last_name", "password", "username")
