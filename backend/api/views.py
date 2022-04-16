@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.db.models import Exists, F, Sum, Value
+from django.db.models import Exists, Sum, Value, OuterRef
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
@@ -90,15 +90,16 @@ class RecipeViewSet(viewsets.ModelViewSet):
     filterset_class = RecipeFilter
 
     def get_queryset(self):
+        user = self.request.user
         return Recipe.objects.prefetch_related().annotate(
             is_favorited=(
-                Exists(self.request.user.favourite.filter(id=F("id")))
-                if self.request.user.is_authenticated
+                Exists(user.favourite.filter(id=OuterRef("id")))
+                if user.is_authenticated
                 else Value(False)
             ),
             is_in_shopping_cart=(
-                Exists(self.request.user.shopping_list.filter(id=F("id")))
-                if self.request.user.is_authenticated
+                Exists(user.shopping_list.filter(id=OuterRef("id")))
+                if user.is_authenticated
                 else Value(False)
             ),
         )

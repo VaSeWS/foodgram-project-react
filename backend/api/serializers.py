@@ -85,20 +85,8 @@ class RecipeSerializer(serializers.ModelSerializer):
         source="ingredient_entries", many=True
     )
     image = Base64ImageField()
-    is_favorited = serializers.SerializerMethodField()
-    is_in_shopping_cart = serializers.SerializerMethodField()
-
-    def get_is_favorited(self, obj):
-        user = self.context.get("request").user
-        if user.is_anonymous:
-            return False
-        return user.favourite.filter(id=obj.id).exists()
-
-    def get_is_in_shopping_cart(self, obj):
-        user = self.context.get("request").user
-        if user.is_anonymous:
-            return False
-        return user.shopping_list.filter(id=obj.id).exists()
+    is_favorited = serializers.BooleanField()
+    is_in_shopping_cart = serializers.BooleanField()
 
     class Meta:
         model = Recipe
@@ -204,7 +192,6 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
         return instance
 
     def to_representation(self, instance):
-        print(self.context.get("request"))
         return RecipeSerializer(
             instance, context={"request": self.context.get("request")}
         ).data

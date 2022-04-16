@@ -2,7 +2,7 @@
 
 Site for sharing recipes, backend written on Django and Django REST Framework.
 Backend part of the project was written as Yandex Practicum graduation project.
-Deployed and can be accessed [here](http://51.250.25.14/)
+Deployed and can be accessed here: [51.250.25.14](http://51.250.25.14/)
 Admin's login/password: admin@foodgram.com/admin
 
 ### Launching
