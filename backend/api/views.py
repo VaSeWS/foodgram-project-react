@@ -120,7 +120,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     )
     def favorite(self, request, recipe_id):
         user = request.user
-        recipe = get_object_or_404(Recipe, pk=recipe_id)
+        recipe = get_object_or_404(self.get_queryset(), pk=recipe_id)
         serializer = self.get_serializer(recipe)
         recipe_in_favorite = user.favourite.filter(id=recipe.id).exists()
         error_msg_part = "is already" if request.method == "GET" else "is not"
@@ -145,7 +145,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     )
     def shopping_cart(self, request, recipe_id):
         user = request.user
-        recipe = get_object_or_404(Recipe, pk=recipe_id)
+        recipe = get_object_or_404(self.get_queryset(), pk=recipe_id)
         serializer = self.get_serializer(recipe)
         recipe_in_cart = user.shopping_list.filter(id=recipe.id).exists()
         error_msg_part = "is already" if request.method == "GET" else "is not"
