@@ -3,6 +3,7 @@
 Site for sharing recipes, backend written on Django and Django REST Framework.
 Backend part of the project was written as Yandex Practicum graduation project.
 
+Python 3.9, Django 4.0, DRF 3.13.1
 
 ### Launching
 To launch the project docker is requered. Use `docker-compose up` command. Project will be available at `localhost`.
